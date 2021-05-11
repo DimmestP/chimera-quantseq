@@ -8,9 +8,13 @@ These still need documentation and flexibility.
 To find where they are used, search the document for the name, 
 e.g. "params.featurename" is used in the featureCounts call.
 */
-params.adapters = 'AAAAAAAAAAAA'
-params.index_dir = '../data/Scer_ref_genome/index'
-params.index_prefix = 'CNA3_hisat2'
+params.read_1_adapters_1 = 'AAAAAAAAAAAAAAAAAA'
+params.read_1_adapters_2 = 'TTTTTTTTTTTTTTTTTT'
+params.read_2_adapters_1 = 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA'
+params.read_2_adapters_2 = 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT'
+params.read_2_adapters_3 = 'AATGATACGGCGACCACCGAGATCTACACTCTTTCCCTACACGACGCTCTTCCGATCT'
+params.index_dir = '../data/Scer_ref_genome/'
+params.index_prefix = 'Scer_R64_genome'
 params.mRNAgff = 'data/Scer_ref_genome/GCF_000146045.2_R64_genomic.gff'
 params.input_fq_dir = '../data/subsampled_chimera_quantseq_fasta/'
 params.output_dir = 'chimera_quantseq_EH_030521'
@@ -22,12 +26,12 @@ params.num_processes = 4
 /*
 Define the aligner index and feature file (gff)
 */
-/*
+
 Channel
         .fromPath("${params.index_dir}/${params.index_prefix}.*.ht2",
                   checkIfExists: true)
         .collect().set { index_ht2_parts }
-*/
+
 mRNAgff = Channel.fromPath(params.mRNAgff)
 
 
@@ -36,8 +40,7 @@ Define the input read files in fastq.gz format
 */
 
 input_fq = Channel
-    .fromPath("${params.input_fq_dir}/*.fastq.gz")
-    .map { file -> tuple(file.simpleName, file) }
+    .fromFilePairs("${params.input_fq_dir}/*_R{1,2}_001.fastq.gz")
     .into { input_fq_qc; input_fq_cut }
 
 /*
@@ -47,21 +50,21 @@ Run FastQC to produce a quality control report for the input data for every samp
 process runFastQC{
     errorStrategy 'ignore'
     tag "${sample_id}"
-    publishDir "${params.output_dir}/${sample_id}", saveAs: { "${sample_id}_fastqc.zip" }, mode: 'copy', overwrite: true
+    publishDir "${params.output_dir}/${sample_id}", mode: 'copy', overwrite: true
     input:
-        set sample_id, file(sample_fq) from input_fq_qc
+        set sample_id, file(paired_sample_fq) from input_fq_qc
 
     output:
         file("${sample_id}_fastqc/*.zip") into fastqc_files
+   
 
     """
     mkdir ${sample_id}_fastqc
     fastqc --outdir ${sample_id}_fastqc \
     -t ${params.num_processes} \
-    ${sample_fq}
+    ${paired_sample_fq}
     """
 }
-
 
 /*
 Cut sequencing adapters from 3' end of gene
@@ -74,24 +77,25 @@ process cutAdapters {
     input:
         set sample_id, file(sample_fq) from input_fq_cut
     output:
-        tuple val(sample_id), file("trim.fq") into cut_fq
+        tuple val(sample_id), file("trim_*.fq") into cut_fq
     shell:
         """
-        cutadapt --trim-n -O 1 -m 5 -a ${params.adapters} \
-            -o trim.fq ${sample_fq} -j ${params.num_processes}
+        cutadapt --trim-n -O 1 -m 20 -a ${params.read_1_adapters_1} -a ${params.read_1_adapters_2}\
+	    -A ${params.read_2_adapters_1} -A ${params.read_2_adapters_2} -A ${params.read_2_adapters_3}\
+            -o trim_1.fq -p trim_2.fq -j ${params.num_processes} ${sample_fq[0]} ${sample_fq[1]}
         """
 }
 
 /*
 Align trimmed reads to the genome with hisat2
 */
-/*
+
 process alignHisat2 {
     errorStrategy 'ignore'
     tag "${sample_id}"
     publishDir "${params.output_dir}/${sample_id}", pattern: '*.hisat2_summary.txt', mode: 'copy', overwrite: true
     input:
-        set sample_id, file(sample_fq_1), file(sample_fq_2) from cut_fq
+        set sample_id, file(sample_fq) from cut_fq
         file(index_ht2_parts) from index_ht2_parts
     output:
         file("unaligned.fq") into unaligned_fq
@@ -105,11 +109,11 @@ process alignHisat2 {
             --no-unal \
             --un unaligned.fq -x ${params.index_prefix} \
             -S aligned.sam \
-	    -1 sample_fq_1 -2 sample_fq_2 \
+	    -1 ${sample_fq[0]} -2 ${sample_fq[1]} \
             --summary-file ${sample_id}.hisat2_summary.txt
         """
 }
-*/
+
 /*
 Turn unsorted aligned samfiles into sorted indexed compressed bamfiles
 */
