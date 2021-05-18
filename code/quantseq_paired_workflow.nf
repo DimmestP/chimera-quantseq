@@ -13,11 +13,11 @@ params.read_1_adapters_2 = 'TTTTTTTTTTTTTTTTTT'
 params.read_2_adapters_1 = 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA'
 params.read_2_adapters_2 = 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT'
 params.read_2_adapters_3 = 'AATGATACGGCGACCACCGAGATCTACACTCTTTCCCTACACGACGCTCTTCCGATCT'
-params.index_dir = '../data/Scer_ref_genome/'
+params.index_dir = '../data/input/Scer_ref_genome/'
 params.index_prefix = 'Scer_R64_genome'
-params.mRNAgff = 'data/Scer_ref_genome/GCF_000146045.2_R64_genomic.gff'
-params.input_fq_dir = '../data/subsampled_chimera_quantseq_fasta/'
-params.output_dir = 'chimera_quantseq_EH_030521'
+params.mRNAgff = 'data/input/Scer_ref_genome/GCF_000146045.2_R64_genomic.gff'
+params.input_fq_dir = '../data/input/EdWallace-030521-data/'
+params.output_dir = '../data/output/'
 params.featuretype = 'mRNA'
 params.featurename = 'Name'
 params.num_processes = 4
@@ -50,7 +50,7 @@ Run FastQC to produce a quality control report for the input data for every samp
 process runFastQC{
     errorStrategy 'ignore'
     tag "${sample_id}"
-    publishDir "${params.output_dir}/${sample_id}", mode: 'copy', overwrite: true
+    publishDir "${params.output_dir}/FastQC/${sample_id}", mode: 'copy', overwrite: true
     input:
         set sample_id, file(paired_sample_fq) from input_fq_qc
 
@@ -93,7 +93,7 @@ Align trimmed reads to the genome with hisat2
 process alignHisat2 {
     errorStrategy 'ignore'
     tag "${sample_id}"
-    publishDir "${params.output_dir}/${sample_id}", pattern: '*.hisat2_summary.txt', mode: 'copy', overwrite: true
+    publishDir "${params.output_dir}/alignment/${sample_id}", pattern: '*.hisat2_summary.txt', mode: 'copy', overwrite: true
     input:
         set sample_id, file(sample_fq) from cut_fq
         file(index_ht2_parts) from index_ht2_parts
@@ -117,7 +117,7 @@ process alignHisat2 {
 /*
 Turn unsorted aligned samfiles into sorted indexed compressed bamfiles
 */
-/*
+
 process samViewSort {
     errorStrategy 'ignore'
     tag "${sample_id}"
@@ -134,18 +134,18 @@ process samViewSort {
         samtools index aligned_sorted.bam
         """
 }
-/*
+
 // Split channel for use in multiple downstream processes.
-//aligned_sorted_bam.into { bedgraph_bam; htscount_bam }
+aligned_sorted_bam.into { bedgraph_bam; htscount_bam }
 
 /*
 Make bedgraphs showing coverage of aligned reads
 */
-/*
+
 process makeBedgraphs {
     errorStrategy 'ignore'
     tag "${sample_id}"
-    publishDir "${params.output_dir}/${sample_id}", mode: 'copy', overwrite: true
+    publishDir "${params.output_dir}/bedgraph/${sample_id}", mode: 'copy', overwrite: true
     input:
         tuple val(sample_id), file(sample_bam), file(sample_bam_bai) \
             from bedgraph_bam
@@ -161,11 +161,11 @@ process makeBedgraphs {
             -strand - | gzip > minus.bedgraph.gz
         """
 }
-*/
+
 /*
 Run rename Bam files by sample, for input into featureCounts.
 */
-/*
+
 process renameBamSample {
     errorStrategy 'ignore'
     tag "${sample_id}"
@@ -179,7 +179,7 @@ process renameBamSample {
         ln -s ${sample_bam} ${sample_id}_aln.bam
         """
 }
-*/
+
 /*
 Run featureCounts to count aligned reads to genes for all processed samples
 */
@@ -201,7 +201,7 @@ process countAllmRNA {
 /*
 Run multiQC to collate single quality control report across all samples.
 */
-/*
+
 process runMultiQC{
     tag { "multiQC" }
     publishDir "${params.output_dir}", mode: 'copy', overwrite: true
@@ -215,4 +215,4 @@ process runMultiQC{
     multiqc .
     """
 }
-*/
+
