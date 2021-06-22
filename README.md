@@ -12,8 +12,8 @@ I am still in the process of updating the workflow to function for paired end re
 - [x] Fastqc
 - [x] cutAdapters
 - [x] alignHisat2
-- [ ] samViewSort
-- [ ] makeBedgraphs
-- [ ] renameBamSample
+- [x] samViewSort
+- [x] makeBedgraphs
+- [x] renameBamSample
 - [ ] countAllmRNA
-- [ ] runMultiQC
+- [x] runMultiQC
