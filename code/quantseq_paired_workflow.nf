@@ -15,13 +15,52 @@ params.read_2_adapters_2 = 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT'
 params.read_2_adapters_3 = 'AATGATACGGCGACCACCGAGATCTACACTCTTTCCCTACACGACGCTCTTCCGATCT'
 params.index_dir = '../data/input/Scer_ref_genome/'
 params.index_prefix = 'Scer_R64_genome'
-params.mRNAgff = 'data/input/Scer_ref_genome/GCF_000146045.2_R64_genomic.gff'
+params.mRNAgff = '../data/input/Scer_ref_genome/Scer_R64_annotation.gff'
 params.input_fq_dir = '../data/input/EdWallace-030521-data/'
 params.output_dir = '../data/output/'
 params.featuretype = 'mRNA'
 params.featurename = 'Name'
 params.num_processes = 4
 
+/* Flatten nested list of file names (used after grouping by sample) */
+
+flattenFileList = {
+    list_of_paired_files = it[1]
+    flattened_file_list = list_of_paired_files.flatten()
+    it[1] = flattened_file_list
+    it
+}
+
+/*
+Define the input fastq.gz files, pairing forward and reverse reads and grouping across lanes by sample anme
+*/
+
+multi_lane_input_fq = Channel
+    .fromFilePairs("${params.input_fq_dir}/*_R{1,2}_001.fastq.gz", size: 2) {file -> (file =~ /\w\d*_\w\d+(?=_L)/)[0]} /* closure extracts sample name from file name */
+    .groupTuple(size: 4) /* group lanes */
+    .map(flattenFileList)
+
+
+process combineLanesAcrossSamples {
+    errorStrategy 'retry'
+    maxRetries 3
+    tag "${sample_id}"
+    input:
+    set sample_id, file(seq) from multi_lane_input_fq
+
+    output:
+    tuple val(sample_id), file("${sample_id}_R*.fastq.gz") into input_fq
+
+    """
+    cat ${seq.findAll{it =~/_R1_/}.asType(nextflow.util.BlankSeparatedList)} > ${sample_id + '_R1.fastq.gz'}
+    cat ${seq.findAll{it =~/_R2_/}.asType(nextflow.util.BlankSeparatedList)} > ${sample_id + '_R2.fastq.gz'}
+   """
+}
+
+/* split input_fq into two separate channels */
+input_fq
+    .tap{input_fq_qc}
+    .tap{input_fq_cut}
 
 /*
 Define the aligner index and feature file (gff)
@@ -36,19 +75,12 @@ mRNAgff = Channel.fromPath(params.mRNAgff)
 
 
 /*
-Define the input read files in fastq.gz format
-*/
-
-input_fq = Channel
-    .fromFilePairs("${params.input_fq_dir}/*_R{1,2}_001.fastq.gz")
-    .into { input_fq_qc; input_fq_cut }
-
-/*
 Run FastQC to produce a quality control report for the input data for every sample
 */
 
 process runFastQC{
-    errorStrategy 'ignore'
+    errorStrategy 'retry'
+    maxRetries 3
     tag "${sample_id}"
     publishDir "${params.output_dir}/FastQC/${sample_id}", mode: 'copy', overwrite: true
     input:
@@ -72,7 +104,8 @@ Cut sequencing adapters from 3' end of gene
 
 
 process cutAdapters {
-    errorStrategy 'ignore'
+    errorStrategy 'retry'
+    maxRetries 3
     tag "${sample_id}"
     input:
         set sample_id, file(sample_fq) from input_fq_cut
@@ -91,7 +124,8 @@ Align trimmed reads to the genome with hisat2
 */
 
 process alignHisat2 {
-    errorStrategy 'ignore'
+    errorStrategy 'retry'
+    maxRetries 3
     tag "${sample_id}"
     publishDir "${params.output_dir}/alignment/${sample_id}", pattern: '*.hisat2_summary.txt', mode: 'copy', overwrite: true
     input:
@@ -119,7 +153,8 @@ Turn unsorted aligned samfiles into sorted indexed compressed bamfiles
 */
 
 process samViewSort {
-    errorStrategy 'ignore'
+    errorStrategy 'retry'
+    maxRetries 3
     tag "${sample_id}"
     input:
         set val(sample_id), file(sample_sam) from aligned_sam
@@ -143,7 +178,8 @@ Make bedgraphs showing coverage of aligned reads
 */
 
 process makeBedgraphs {
-    errorStrategy 'ignore'
+    errorStrategy 'retry'
+    maxRetries 3
     tag "${sample_id}"
     publishDir "${params.output_dir}/bedgraph/${sample_id}", mode: 'copy', overwrite: true
     input:
@@ -167,7 +203,8 @@ Run rename Bam files by sample, for input into featureCounts.
 */
 
 process renameBamSample {
-    errorStrategy 'ignore'
+    errorStrategy 'retry'
+    maxRetries 3
     tag "${sample_id}"
     input:
         tuple val(sample_id), file(sample_bam), file(sample_bam_bai) \
@@ -183,10 +220,11 @@ process renameBamSample {
 /*
 Run featureCounts to count aligned reads to genes for all processed samples
 */
-/*
+
 process countAllmRNA {
-    errorStrategy 'ignore'
-    publishDir "${params.output_dir}", mode: 'copy'
+    errorStrategy 'retry'
+    maxRetries 3
+    publishDir "${params.output_dir}/counts/", mode: 'copy'
     input:
         file(sampleid_bams) from sampleid_aln_bam.collect()
         file(mRNAgff)
@@ -197,12 +235,14 @@ process countAllmRNA {
         featureCounts -T ${params.num_processes} -s 1 -t ${params.featuretype} -g ${params.featurename} -a ${mRNAgff} -o counts.txt ${sampleid_bams.join(" ")} 
         """
 }
-*/
+
 /*
 Run multiQC to collate single quality control report across all samples.
 */
 
 process runMultiQC{
+    errorStrategy 'retry'
+    maxRetries 3
     tag { "multiQC" }
     publishDir "${params.output_dir}", mode: 'copy', overwrite: true
     input:
