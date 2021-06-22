@@ -9,6 +9,8 @@ Data was collected by Weronika in May 2021. Analysis was conducted by Weronika a
 
 # Status
 I am still in the process of updating the workflow to function for paired end reads. I have currently updated the following process:
+
+- [x] combineLanesAcrossSamples
 - [x] Fastqc
 - [x] cutAdapters
 - [x] alignHisat2
