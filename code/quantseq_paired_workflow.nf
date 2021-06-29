@@ -14,12 +14,12 @@ params.read_2_adapters_1 = 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA'
 params.read_2_adapters_2 = 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT'
 params.read_2_adapters_3 = 'AATGATACGGCGACCACCGAGATCTACACTCTTTCCCTACACGACGCTCTTCCGATCT'
 params.index_dir = '../data/input/Scer_ref_genome/'
-params.index_prefix = 'Scer_R64_genome'
-params.mRNAgff = '../data/input/Scer_ref_genome/Scer_R64_annotation.gff'
+params.index_prefix = 'saccharomyces_cerevisiae_R64'
+params.mRNAgff = '../data/input/Scer_ref_genome/longest_three_prime_UTRs.gff'
 params.input_fq_dir = '../data/input/EdWallace-030521-data/'
 params.output_dir = '../data/output/'
-params.featuretype = 'mRNA'
-params.featurename = 'Name'
+params.featuretype = 'three_prime_UTR'
+params.featurename = 'ID'
 params.num_processes = 4
 
 /* Flatten nested list of file names (used after grouping by sample) */
