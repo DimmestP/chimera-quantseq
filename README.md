@@ -17,5 +17,5 @@ I am still in the process of updating the workflow to function for paired end re
 - [x] samViewSort
 - [x] makeBedgraphs
 - [x] renameBamSample
-- [ ] countAllmRNA
+- [x] countAllmRNA
 - [x] runMultiQC
