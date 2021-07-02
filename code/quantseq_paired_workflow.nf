@@ -8,17 +8,17 @@ These still need documentation and flexibility.
 To find where they are used, search the document for the name, 
 e.g. "params.featurename" is used in the featureCounts call.
 */
-params.read_1_adapters_1 = 'AAAAAAAAAAAAAAAAAA'
-params.read_1_adapters_2 = 'TTTTTTTTTTTTTTTTTT'
+params.read_1_adapters_1 = 'TTTTTTTTTTTTTTTTTT'
 params.read_2_adapters_1 = 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA'
 params.read_2_adapters_2 = 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT'
 params.read_2_adapters_3 = 'AATGATACGGCGACCACCGAGATCTACACTCTTTCCCTACACGACGCTCTTCCGATCT'
+params.read_2_adapters_4 = 'AAAAAAAAAAAAAAAAAA'
 params.index_dir = '../data/input/Scer_ref_genome/'
 params.index_prefix = 'saccharomyces_cerevisiae_R64'
-params.mRNAgff = '../data/input/Scer_ref_genome/longest_three_prime_UTRs.gff'
+params.mRNAgff = '../data/input/Scer_ref_genome/longest_full-ORF_ypd_plus_other_fixed_UTR_length_transcripts.gff'
 params.input_fq_dir = '../data/input/EdWallace-030521-data/'
 params.output_dir = '../data/output/'
-params.featuretype = 'three_prime_UTR'
+params.featuretype = 'primary_transcript'
 params.featurename = 'ID'
 params.num_processes = 4
 
@@ -113,8 +113,8 @@ process cutAdapters {
         tuple val(sample_id), file("trim_*.fq") into cut_fq
     shell:
         """
-        cutadapt --trim-n -O 1 -m 20 -a ${params.read_1_adapters_1} -a ${params.read_1_adapters_2}\
-	    -A ${params.read_2_adapters_1} -A ${params.read_2_adapters_2} -A ${params.read_2_adapters_3}\
+        cutadapt --trim-n -O 1 -m 20 -a ${params.read_1_adapters_1} -A ${params.read_2_adapters_1}\
+	    -A ${params.read_2_adapters_2} -A ${params.read_2_adapters_3} -A ${params.read_2_adapters_4}\
             -o trim_1.fq -p trim_2.fq -j ${params.num_processes} ${sample_fq[0]} ${sample_fq[1]}
         """
 }
@@ -232,7 +232,7 @@ process countAllmRNA {
         file("counts.txt") into counts
     shell:
         """
-        featureCounts -T ${params.num_processes} -s 1 -t ${params.featuretype} -g ${params.featurename} -a ${mRNAgff} -o counts.txt ${sampleid_bams.join(" ")} 
+        featureCounts -p -T ${params.num_processes} -s 2 -t ${params.featuretype} -g ${params.featurename} -a ${mRNAgff} -o counts.txt ${sampleid_bams.join(" ")} 
         """
 }
 
