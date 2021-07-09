@@ -1,0 +1,128 @@
+---
+title: "Generate gff and fasta files for yeast genome plus constructs"
+author: "Sam Haynes"
+date: "02/07/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(here)
+
+GTF_COLNAMES = c("seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attribute")
+FEATURES = c("primary_transcript","Promoter", "CDS", "Terminator", "URA3", "M1", "M2", "M3")
+```
+
+```{r function}
+write_gff <- function(construct_annotation_tibble, genome_annotation_tibble){
+  sample_name <- construct_annotation_tibble %>%
+    pull(sample_name) %>%
+    unique()
+  
+  construct_name <- construct_annotation_tibble %>%
+    pull(seqname) %>%
+    unique()
+  
+  full_annotation_tibble <- construct_annotation_tibble %>% 
+    ungroup() %>%
+    select(seqname, source, feature, start, end, score, strand, frame, attribute) %>%
+    bind_rows(genome_annotation_tibble)
+    
+  output_gff_file <- here(paste0("./data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_gffs/", 
+                                 sample_name, 
+                                 "_", 
+                                 construct_name,
+                                 "_longest_full_ORF_with_constructs.gff"))
+
+write_lines(
+    x=c("##gff-version 3", 
+        paste0("##", output_gff_file),
+        "##source-version yeastutrgff",
+        paste("##date",lubridate::today())),
+    path=output_gff_file)
+
+write_tsv(full_annotation_tibble, output_gff_file, append = TRUE)
+}
+
+write_fasta <- function(construct_data, genomic_fasta){
+  construct_fasta_file <- construct_data$filepath
+  
+  construct_name <- construct_data$construct_name
+  
+  sample_name <- construct_data$sample_name
+  
+  construct_fasta <- read_table(construct_fasta_file)
+  
+  construct_genome_fasta_file_path <- here(paste0("./data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_fastas/", 
+                               sample_name, 
+                               "_",
+                               construct_name,
+                               "_with_saccharomyces_cerevisiae_R64.fa"))
+  
+  write_tsv(genomic_fasta, 
+            path = construct_genome_fasta_file_path, 
+            col_names = TRUE)
+
+write_tsv(construct_fasta,
+  path = construct_genome_fasta_file_path,
+  append=TRUE,
+  here("./data/input/Scer_ref_genome/construct_integrated_genome/saccharomyces_cerevisiae_R64_with_construct.fa"), 
+  col_names = TRUE)
+}
+```
+
+```{r generate-plasmid-feature-annotations}
+plasmid_features <- read_delim(here("./data/input/Scer_ref_genome/construct_integrated_genome/plasmid_features.csv"), ";")
+
+RNA_seq_sample_names <- read_csv(here("./data/input/sample_to_construct_table.csv"))
+
+plasmid_features_long <- plasmid_features %>% 
+  select(-Linear_sequence,-Orig_Promoter,-Orig_Terminator) %>% 
+  pivot_longer(!Construct_name,names_to = "feature", values_to = "position") %>% 
+  separate(feature,into=c("feature","location"),sep="_") %>% 
+  pivot_wider(names_from = location, values_from = position) %>%
+  filter(!is.na(start))
+
+plasmid_primary_transcript_feature <- plasmid_features_long %>%
+  filter(feature != "URA3") %>%
+  group_by(Construct_name) %>%
+  summarise(feature = "primary_transcript", start = min(start), stop = max(stop))
+
+plasmid_features_all <- plasmid_features_long %>%
+  bind_rows(plasmid_primary_transcript_feature) %>%
+  mutate(strand = ifelse(feature == "URA3", "-", "+")) %>%
+  mutate(source = "chimera-project", score = ".", frame = ".", attribute = paste0("ID=", Construct_name), seqname = Construct_name, end = stop) %>%
+  select(GTF_COLNAMES)
+
+plasmid_features_all_two_reps <- plasmid_features_all %>%
+  mutate(rep = paste0(seqname, "_b1")) %>%
+  bind_rows(plasmid_features_all %>%
+              mutate(rep = paste0(seqname, "_b2"))) %>%
+  inner_join(RNA_seq_sample_names, by = c("rep" = "construct_name"))
+
+genome_features <- read_tsv(here("data/input/Scer_ref_genome/longest_full-ORF_ypd_plus_other_fixed_UTR_length_transcripts.gff"), comment="#", col_names = GTF_COLNAMES)
+
+# Write separate gff files for each sample
+plasmid_features_all_two_reps %>%
+  group_by(sample_name) %>%
+  do(write_gff(.,genome_features))
+
+```
+
+```{r create-plasmid-fasta-files}
+construct_fasta_file_names <- tibble(filepath = list.files(here("./data/input/Scer_ref_genome/construct_integrated_genome/linearized_plasmids"), full.names = TRUE)) %>%
+  mutate(construct_name = str_extract(filepath, "(?<=linear_)[a-z0-9A-Z\\-_]+(?=.fa)"))
+
+construct_fasta_file_names_two_reps <- construct_fasta_file_names %>%
+  mutate(construct_name = paste0(construct_name, "_b1")) %>%
+  bind_rows(construct_fasta_file_names%>%
+              mutate(construct_name = paste0(construct_name, "_b2"))) %>%
+  inner_join(RNA_seq_sample_names)
+
+genomic_fasta <- read_table(here("./data/input/Scer_ref_genome/saccharomyces_cerevisiae_R64-2-1_20150113_chrnames.fsa"))
+
+construct_fasta_file_names_two_reps %>%
+  group_by(sample_name) %>%
+  do(write_fasta(.,genomic_fasta))
+
+```
