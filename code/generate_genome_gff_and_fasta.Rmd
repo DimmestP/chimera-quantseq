@@ -29,10 +29,8 @@ write_gff <- function(construct_annotation_tibble, genome_annotation_tibble){
     bind_rows(genome_annotation_tibble)
     
   output_gff_file <- here(paste0("./data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_gffs/", 
-                                 sample_name, 
-                                 "_", 
-                                 construct_name,
-                                 "_longest_full_ORF_with_constructs.gff"))
+                                 sample_name,
+                                 "_sample_longest_full_ORF_with_constructs.gff"))
 
 write_lines(
     x=c("##gff-version 3", 
@@ -54,10 +52,8 @@ write_fasta <- function(construct_data, genomic_fasta){
   construct_fasta <- read_table(construct_fasta_file)
   
   construct_genome_fasta_file_path <- here(paste0("./data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_fastas/", 
-                               sample_name, 
-                               "_",
-                               construct_name,
-                               "_with_saccharomyces_cerevisiae_R64.fa"))
+                               sample_name,
+                               "_sample_with_saccharomyces_cerevisiae_R64.fa"))
   
   write_tsv(genomic_fasta, 
             path = construct_genome_fasta_file_path, 

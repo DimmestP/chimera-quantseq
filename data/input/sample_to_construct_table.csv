@@ -21,3 +21,15 @@ A10,pRPS3-mCherry-tRPS3_modA_b1
 B10,pRPS3-mCherry-tRPS3_modA_b2
 A11,pTSA1-mCherry-tTSA1_modA_b1
 B11,pTSA1-mCherry-tTSA1_modA_b2
+A12,pPGK1-mCherry-tRPS3_WT_b1
+B12,pPGK1-mCherry-tRPS3_WT_b2
+A13,pPGK1-mCherry-tRPS3_mod0_b1
+B13,pPGK1-mCherry-tRPS3_mod0_b2
+A14,pPGK1-mCherry-tRPS3_modA_b1
+B14,pPGK1-mCherry-tRPS3_modA_b2
+A15,pPGK1-mCherry-tRPS3_modB_b1
+B15,pPGK1-mCherry-tRPS3_modB_b2
+A16,pPGK1-mCherry-tRPS3_modE_b1
+B16,pPGK1-mCherry-tRPS3_modE_b2
+E1,pRPS3-mCherry-tRPS3_mod0_b1
+E2,pRPS3-mCherry-tRPS3_mod0_b2
