@@ -13,9 +13,9 @@ params.read_2_adapters_1 = 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA'
 params.read_2_adapters_2 = 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT'
 params.read_2_adapters_3 = 'AATGATACGGCGACCACCGAGATCTACACTCTTTCCCTACACGACGCTCTTCCGATCT'
 params.read_2_adapters_4 = 'AAAAAAAAAAAAAAAAAA'
-params.index_dir = '../data/input/Scer_ref_genome/'
-params.index_prefix = 'saccharomyces_cerevisiae_R64'
-params.mRNAgff = '../data/input/Scer_ref_genome/longest_full-ORF_ypd_plus_other_fixed_UTR_length_transcripts.gff'
+params.index_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_fastas/indexed_genome/'
+params.index_prefix = '_sample_with_saccharomyces_cerevisiae_R64'
+params.mRNAgff_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_gffs/'
 params.input_fq_dir = '../data/input/EdWallace-030521-data/'
 params.output_dir = '../data/output/'
 params.featuretype = 'primary_transcript'
@@ -36,7 +36,7 @@ Define the input fastq.gz files, pairing forward and reverse reads and grouping 
 */
 
 multi_lane_input_fq = Channel
-    .fromFilePairs("${params.input_fq_dir}/*_R{1,2}_001.fastq.gz", size: 2) {file -> (file =~ /\w\d*_\w\d+(?=_L)/)[0]} /* closure extracts sample name from file name */
+    .fromFilePairs("${params.input_fq_dir}/*_R{1,2}_001.fastq.gz", size: 2) {file -> (file =~ /\w\d*(?=_\w\d+_L)/)[0]} /* closure extracts sample name from file name */
     .groupTuple(size: 4) /* group lanes */
     .map(flattenFileList)
 
@@ -63,22 +63,11 @@ input_fq
     .tap{input_fq_cut}
 
 /*
-Define the aligner index and feature file (gff)
-*/
-
-Channel
-        .fromPath("${params.index_dir}/${params.index_prefix}.*.ht2",
-                  checkIfExists: true)
-        .collect().set { index_ht2_parts }
-
-mRNAgff = Channel.fromPath(params.mRNAgff)
-
-
-/*
 Run FastQC to produce a quality control report for the input data for every sample
 */
 
 process runFastQC{
+    conda 'bioconda::fastqc=0.11.9'
     errorStrategy 'retry'
     maxRetries 3
     tag "${sample_id}"
@@ -104,6 +93,7 @@ Cut sequencing adapters from 3' end of gene
 
 
 process cutAdapters {
+    conda 'bioconda::cutadapt=1.18'
     errorStrategy 'retry'
     maxRetries 3
     tag "${sample_id}"
@@ -120,17 +110,34 @@ process cutAdapters {
 }
 
 /*
+Define the aligner indexes for each construct
+*/
+
+extract_sample_name = {
+    sample_name = it =~ /(?<=\/)\w\d*(?=_)/
+    sample_file_tuple = [sample_name[0],it]
+    sample_file_tuple
+}
+
+indexed_genomes = Channel.fromPath( "${params.index_dir}*.ht2" )
+    .map(extract_sample_name)
+    .groupTuple(size: 8)
+
+reads_genome_tuple = indexed_genomes
+    .join(cut_fq)
+
+/*
 Align trimmed reads to the genome with hisat2
 */
 
 process alignHisat2 {
+    conda 'bioconda::hisat2=2.1.0'
     errorStrategy 'retry'
     maxRetries 3
     tag "${sample_id}"
     publishDir "${params.output_dir}/alignment/${sample_id}", pattern: '*.hisat2_summary.txt', mode: 'copy', overwrite: true
     input:
-        set sample_id, file(sample_fq) from cut_fq
-        file(index_ht2_parts) from index_ht2_parts
+        tuple val(sample_id), path(index_ht2_parts), path(sample_fq) from reads_genome_tuple
     output:
         file("unaligned.fq") into unaligned_fq
         file("${sample_id}.hisat2_summary.txt") into alignment_logs
@@ -141,7 +148,7 @@ process alignHisat2 {
         hisat2 -p ${params.num_processes} -k 2 \
             --pen-cansplice 4 --pen-noncansplice 12 --min-intronlen 40  --max-intronlen 200 \
             --no-unal \
-            --un unaligned.fq -x ${params.index_prefix} \
+            --un unaligned.fq -x ${sample_id}${params.index_prefix} \
             -S aligned.sam \
 	    -1 ${sample_fq[0]} -2 ${sample_fq[1]} \
             --summary-file ${sample_id}.hisat2_summary.txt
@@ -153,6 +160,7 @@ Turn unsorted aligned samfiles into sorted indexed compressed bamfiles
 */
 
 process samViewSort {
+    conda 'bioconda::samtools=1.11'
     errorStrategy 'retry'
     maxRetries 3
     tag "${sample_id}"
@@ -178,6 +186,7 @@ Make bedgraphs showing coverage of aligned reads
 */
 
 process makeBedgraphs {
+    conda 'bioconda::bedtools=2.30.0'
     errorStrategy 'retry'
     maxRetries 3
     tag "${sample_id}"
@@ -210,7 +219,7 @@ process renameBamSample {
         tuple val(sample_id), file(sample_bam), file(sample_bam_bai) \
             from htscount_bam
     output:
-        file("${sample_id}_aln.bam") into sampleid_aln_bam
+        tuple val(sample_id),  file("${sample_id}_aln.bam") into sampleid_aln_bam
     shell:
         """
         ln -s ${sample_bam} ${sample_id}_aln.bam
@@ -218,21 +227,33 @@ process renameBamSample {
 }
 
 /*
+Define the gffs for each construct  
+*/
+
+mRNAgff = Channel.fromPath("${params.mRNAgff_dir}*.gff")
+          .map(extract_sample_name)
+
+gff_bam_tuple = mRNAgff
+                .join(sampleid_aln_bam)
+
+
+/*
 Run featureCounts to count aligned reads to genes for all processed samples
 */
 
 process countAllmRNA {
+    conda 'bioconda::subread=2.0.0'
     errorStrategy 'retry'
     maxRetries 3
-    publishDir "${params.output_dir}/counts/", mode: 'copy'
+    tag "${sample_id}"
+    publishDir "${params.output_dir}/counts/${sample_id}", mode: 'copy'
     input:
-        file(sampleid_bams) from sampleid_aln_bam.collect()
-        file(mRNAgff)
+        tuple val(sample_id), file(mRNAgff), file(sampleid_bams) from gff_bam_tuple
     output:
-        file("counts.txt") into counts
+        file("${sample_id}_counts.txt") into counts
     shell:
         """
-        featureCounts -p -T ${params.num_processes} -s 2 -t ${params.featuretype} -g ${params.featurename} -a ${mRNAgff} -o counts.txt ${sampleid_bams.join(" ")} 
+        featureCounts -p -T ${params.num_processes} -s 2 -t ${params.featuretype} -g ${params.featurename} -a ${mRNAgff} -o "${sample_id}_counts.txt" ${sampleid_bams.join(" ")} 
         """
 }
 
