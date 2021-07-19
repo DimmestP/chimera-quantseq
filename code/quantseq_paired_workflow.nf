@@ -16,8 +16,8 @@ params.read_2_adapters_4 = 'AAAAAAAAAAAAAAAAAA'
 params.index_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_fastas/indexed_genome/'
 params.index_prefix = '_sample_with_saccharomyces_cerevisiae_R64'
 params.mRNAgff_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_gffs/'
-params.input_fq_dir = '../data/input/EdWallace-030521-data/'
-params.output_dir = '../data/output/'
+params.input_fq_dir = '/homes/wallacelab/datastore/wallace_rna/bigdata/fastq/EdWallace-030521-data/'
+params.output_dir = '/homes/wallacelab/datastore/wallace_rna/bigdata/chimera_quantseq_pipeline_output/'
 params.featuretype = 'primary_transcript'
 params.featurename = 'ID'
 params.num_processes = 4
@@ -251,6 +251,8 @@ process countAllmRNA {
         tuple val(sample_id), file(mRNAgff), file(sampleid_bams) from gff_bam_tuple
     output:
         file("${sample_id}_counts.txt") into counts
+        file("") into counts_summary
+        file("") into 
     shell:
         """
         featureCounts -p -T ${params.num_processes} -s 2 -t ${params.featuretype} -g ${params.featurename} -a ${mRNAgff} -o "${sample_id}_counts.txt" ${sampleid_bams.join(" ")} 
