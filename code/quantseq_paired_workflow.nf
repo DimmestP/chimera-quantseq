@@ -16,8 +16,8 @@ params.read_2_adapters_4 = 'AAAAAAAAAAAAAAAAAA'
 params.index_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_fastas/indexed_genome/'
 params.index_prefix = '_sample_with_saccharomyces_cerevisiae_R64'
 params.mRNAgff_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_gffs/'
-params.input_fq_dir = '/homes/wallacelab/datastore/wallace_rna/bigdata/fastq/EdWallace-030521-data/'
-params.output_dir = '/homes/wallacelab/datastore/wallace_rna/bigdata/chimera_quantseq_pipeline_output/'
+params.input_fq_dir = '/homes/wallacelab/datastore/wallace_rna/bigdata/fastq/EdWallace-030521-data/' 
+params.output_dir = '/homes/wallacelab/datastore/wallace_rna/data/2021/07-July/Sam/chimera_quantseq_pipeline_output/'
 params.featuretype = 'primary_transcript'
 params.featurename = 'ID'
 params.num_processes = 4
@@ -31,15 +31,23 @@ flattenFileList = {
     it
 }
 
+/* Extract sample code from file name */
+extractSampleCode = {
+    filename = it[0]
+    sample_name = (filename =~ /\w\d*(?=_\w\d+_L)/)[0]
+    it[0] = sample_name
+    it
+}
+
 /*
 Define the input fastq.gz files, pairing forward and reverse reads and grouping across lanes by sample anme
 */
 
 multi_lane_input_fq = Channel
-    .fromFilePairs("${params.input_fq_dir}/*_R{1,2}_001.fastq.gz", size: 2) {file -> (file =~ /\w\d*(?=_\w\d+_L)/)[0]} /* closure extracts sample name from file name */
-    .groupTuple(size: 4) /* group lanes */
+    .fromFilePairs("${params.input_fq_dir}/*_R{1,2}_001.fastq.gz", size: 2)
+    .map(extractSampleCode)
+    .groupTuple(size: 4)
     .map(flattenFileList)
-
 
 process combineLanesAcrossSamples {
     errorStrategy 'retry'
@@ -135,7 +143,7 @@ process alignHisat2 {
     errorStrategy 'retry'
     maxRetries 3
     tag "${sample_id}"
-    publishDir "${params.output_dir}/alignment/${sample_id}", pattern: '*.hisat2_summary.txt', mode: 'copy', overwrite: true
+    publishDir "${params.output_dir}/alignment/${sample_id}", pattern: "*.hisat2_summary.txt", mode: 'copy', overwrite: true
     input:
         tuple val(sample_id), path(index_ht2_parts), path(sample_fq) from reads_genome_tuple
     output:
@@ -230,12 +238,12 @@ process renameBamSample {
 Define the gffs for each construct  
 */
 
+
 mRNAgff = Channel.fromPath("${params.mRNAgff_dir}*.gff")
           .map(extract_sample_name)
 
 gff_bam_tuple = mRNAgff
                 .join(sampleid_aln_bam)
-
 
 /*
 Run featureCounts to count aligned reads to genes for all processed samples
@@ -246,16 +254,18 @@ process countAllmRNA {
     errorStrategy 'retry'
     maxRetries 3
     tag "${sample_id}"
-    publishDir "${params.output_dir}/counts/${sample_id}", mode: 'copy'
+    publishDir "${params.output_dir}/counts/${sample_id}", pattern:"*.txt", mode: 'copy', overwrite: true
+    publishDir "${params.output_dir}/counts/${sample_id}", pattern:"*.summary", mode: 'copy', overwrite: true
+    publishDir "${params.output_dir}/sorted_bam/${sample_id}", pattern:"*.bam",  mode: 'copy', overwrite: true
     input:
         tuple val(sample_id), file(mRNAgff), file(sampleid_bams) from gff_bam_tuple
     output:
         file("${sample_id}_counts.txt") into counts
-        file("") into counts_summary
-        file("") into 
+        file("${sample_id}_counts.txt.summary") into counts_summary
+        file("${sample_id}_aln.bam.featureCounts.bam") into feature_assigned_bam
     shell:
         """
-        featureCounts -p -T ${params.num_processes} -s 2 -t ${params.featuretype} -g ${params.featurename} -a ${mRNAgff} -o "${sample_id}_counts.txt" ${sampleid_bams.join(" ")} 
+        featureCounts -p -T ${params.num_processes} -s 2 -t ${params.featuretype} -g ${params.featurename} -a ${mRNAgff} -o "${sample_id}_counts.txt" ${sampleid_bams.join(" ")} -R BAM
         """
 }
 
