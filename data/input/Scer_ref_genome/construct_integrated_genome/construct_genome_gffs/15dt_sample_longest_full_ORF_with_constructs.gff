@@ -1,7 +1,7 @@
 ##gff-version 3
 ##/home/dimmest-p/Documents/PhD/3UTR_motifs/motifPrediction/chimera_quantseq_data/chimera-quantseq/./data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_gffs/15dt_sample_longest_full_ORF_with_constructs.gff
 ##source-version yeastutrgff
-##date 2021-08-25
+##date 2021-08-27
 pRPS3-mCherry-tRPS3_modE	chimera-project	Promoter	2099	2599	.	+	.	ID=pRPS3-mCherry-tRPS3_modE
 pRPS3-mCherry-tRPS3_modE	chimera-project	CDS	2600	3310	.	+	.	ID=pRPS3-mCherry-tRPS3_modE
 pRPS3-mCherry-tRPS3_modE	chimera-project	Terminator	3311	3538	.	+	.	ID=pRPS3-mCherry-tRPS3_modE
