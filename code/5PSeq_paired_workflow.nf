@@ -13,7 +13,7 @@ params.read_adapters_1 = 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA'
 params.read_adapters_2 = 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT'
 params.read_adapters_3 = 'AATGATACGGCGACCACCGAGATCTACACTCTTTCCCTACACGACGCTCTTCCGATCT'
 params.read_2_adapter = 'AAAAAAAAAAAAAAAAAA'
-params.index_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_fastas/'
+params.index_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_fastas/indexed_genome/'
 params.index_prefix = '_sample_with_saccharomyces_cerevisiae_R64'
 params.mRNAgff_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_gffs/'
 params.input_fq_dir = '/homes/wallacelab/datastore/wallace_rna/bigdata/fastq/5PSeq_data/'
@@ -37,7 +37,6 @@ input_fq = Channel
     .fromPath("${params.input_fq_dir}/*dt_*.gz")
     .map(extractFqSampleCode)
     .groupTuple(size:2, sort:"true")
-    .view()
 
 /* split input_fq into two separate channels */
 input_fq
@@ -73,7 +72,6 @@ process runFastQC{
 Cut sequencing adapters from 3' end of gene
 */
 
-
 process cutAdapters {
     conda 'bioconda::cutadapt=1.18'
     errorStrategy 'retry'
@@ -96,10 +94,9 @@ process cutAdapters {
 Define the aligner indexes for each construct
 */
 
-/*
 
 extractHt2SampleCode = {
-    sample_name = it =~ /(?<=\/)\w\d*(?=_)/
+    sample_name = it =~ /(?<=\/)\d+[a-z]+(?=_)/
     sample_file_tuple = [sample_name[0],it]
     sample_file_tuple
 }
@@ -110,13 +107,11 @@ indexed_genomes = Channel.fromPath( "${params.index_dir}*.ht2" )
 
 reads_genome_tuple = indexed_genomes
     .join(cut_fq)
-*/
+
 
 /*
 Align trimmed reads to the genome with hisat2
 */
-
-/*
 
 process alignHisat2 {
     conda 'bioconda::hisat2=2.1.0'
@@ -143,13 +138,11 @@ process alignHisat2 {
         """
 }
 
-*/
+
 
 /*
 Turn unsorted aligned samfiles into sorted indexed compressed bamfiles
 */
-
-/*
 
 process samViewSort {
     conda 'bioconda::samtools=1.11'
@@ -170,16 +163,15 @@ process samViewSort {
         """
 }
 
-*/
+
 
 // Split channel for use in multiple downstream processes.
-// aligned_sorted_bam.into { bedgraph_bam; htscount_bam }
+ aligned_sorted_bam.into { bedgraph_bam; htscount_bam }
 
 /*
 Make bedgraphs showing coverage of aligned reads
 */
 
-/*
 
 process makeBedgraphs {
     conda 'bioconda::bedtools=2.30.0'
@@ -203,13 +195,12 @@ process makeBedgraphs {
         """
 }
 
-*/
+
 
 /*
 Run rename Bam files by sample, for input into featureCounts.
 */
 
-/*
 
 process renameBamSample {
     errorStrategy 'retry'
@@ -226,27 +217,26 @@ process renameBamSample {
         """
 }
 
-*/
+
 
 /*
 Define the gffs for each construct  
 */
 
-/*
+
 
 mRNAgff = Channel.fromPath("${params.mRNAgff_dir}*.gff")
-          .map(extractHt2SampleName)
+          .map(extractHt2SampleCode)
 
 gff_bam_tuple = mRNAgff
                 .join(sampleid_aln_bam)
 
-*/
+
 
 /*
 Run featureCounts to count aligned reads to genes for all processed samples
 */
 
-/*
 
 process countAllmRNA {
     conda 'bioconda::subread=2.0.0'
@@ -268,13 +258,13 @@ process countAllmRNA {
         """
 }
 
-*/
+
 
 /*
 Run multiQC to collate single quality control report across all samples.
 */
 
-/*
+
 
 process runMultiQC{
     errorStrategy 'retry'
@@ -292,4 +282,4 @@ process runMultiQC{
     """
 }
 
-*/
+
