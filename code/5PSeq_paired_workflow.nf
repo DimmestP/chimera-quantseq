@@ -129,12 +129,12 @@ process alignHisat2 {
         """
         hisat2 --version
         hisat2 -p ${params.num_processes} -k 2 \
-            --pen-cansplice 4 --pen-noncansplice 12 --min-intronlen 40  --max-intronlen 200 \
+            --no-spliced-alignment \
             --no-unal \
             --un unaligned.fq -x ${sample_id}${params.index_prefix} \
             -S aligned.sam \
 	    -1 ${sample_fq[0]} -2 ${sample_fq[1]} \
-            --summary-file ${sample_id}.hisat2_summary.txt
+            --summary-file ${sample_id}.hisat2_summary.txt --maxins 1500
         """
 }
 
