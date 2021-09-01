@@ -7,6 +7,7 @@ pTSA1-mCherry-tTSA1_WT	chimera-project	CDS	2359	3069	.	+	.	ID=pTSA1-mCherry-tTSA
 pTSA1-mCherry-tTSA1_WT	chimera-project	Terminator	3070	3289	.	+	.	ID=pTSA1-mCherry-tTSA1_WT
 pTSA1-mCherry-tTSA1_WT	chimera-project	URA3	4127	5151	.	-	.	ID=pTSA1-mCherry-tTSA1_WT
 pTSA1-mCherry-tTSA1_WT	chimera-project	primary_transcript	2099	3289	.	+	.	ID=pTSA1-mCherry-tTSA1_WT
+pTSA1-mCherry-tTSA1_WT	chimera-project	primary_transcript	4127	5151	.	-	.	ID=pTSA1-mCherry-tTSA1_WT_URA3
 chrI	yeastutrgff	primary_transcript	147469	151191	.	-	.	ID=YAL001C_tx0
 chrI	yeastutrgff	primary_transcript	143682	147656	.	+	.	ID=YAL002W_tx0
 chrI	SGD	primary_transcript	142141	143496	.	+	.	ypd=1;ID=YAL003W_id003
