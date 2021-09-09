@@ -1,0 +1,105 @@
+---
+title: "Compare polyA Usage of Chimera Constructs"
+author: "Sam Haynes"
+date: "26/07/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(here)
+
+construct_stop_codon <- tibble(promoter = c(rep(c("pRPS3", "pPGK1", "pTSA1"),
+                                                each = 4), 
+                                            c("pRPS3", "pPGK1", "pTSA1")), 
+                               mod = c(rep(c("mod0", "modA", "modB","modE"),
+                                                times = 3), 
+                                            c("WT", "WT", "WT")),
+                               stop_codon_pos = c(rep(c(3310, 3310, 3069),
+                                                each = 4), 
+                                            c(3310, 3310, 3069)))
+
+# c(3310, 3310, 3069)
+```
+
+```{r functions}
+load_polyA_reads <- function(filename) {
+  full_bed_tibble<- read_tsv(filename,
+                        col_names = c("construct_name", "chromStart", "read_end", 
+                                      "name", "score", "strand", "thickStart",
+                                      "thickEnd", "itemRgb", "blockCount",
+                                      "blockSizes", "blockStarts")) 
+  if(nrow(full_bed_tibble) > 0){
+    full_bed_tibble %>%
+      select(construct_name,read_end) %>%
+      mutate(terminator = str_extract(construct_name, "t[A-Z0-9]+")) %>%
+      mutate(promoter = str_extract(construct_name, "p[A-Z0-9]+")) %>%
+      mutate(mod = str_extract(construct_name, "[a-zA-Z0-9]+$")) %>%
+      mutate(sample = str_extract(filename, "(?<=/)[ABEdt0-9]+(?=_)"))
+  }
+  else{NULL}
+}
+
+# for nucleotides without count data fill with 0 or value of last nucleotide with count data
+
+fill_missing_nucleotide_data <- function(nucleotide_with_known_counts, empty_full_plasmid){
+  # if first nucleotide has no entry, make a cumulative count 0 entry
+  first_entry <- nucleotide_with_known_counts %>%
+    filter(read_end == min(empty_full_plasmid$read_end))
+  
+  if(nrow(first_entry) == 0){
+    nucleotide_with_known_counts <- nucleotide_with_known_counts[1,] %>%
+      mutate(read_end = min(empty_full_plasmid$read_end),
+             cumulative_counts = 0,
+             rel_cumulative_counts = 0) %>%
+      bind_rows(nucleotide_with_known_counts)
+  }
+  
+  
+  empty_full_plasmid %>%
+    filter(construct_name == nucleotide_with_known_counts %>% pull(construct_name) %>% unique) %>%
+  left_join(nucleotide_with_known_counts) %>%
+  fill(read_end, terminator, promoter, mod, sample, cumulative_counts, rel_cumulative_counts, .direction = "down")
+}
+```
+
+```{r load_polyA_reads}
+all_QuantSeq_PolyA_read_files <- list.files(path = here("data/output/sorted_bam/"), pattern = ".bed$", recursive = TRUE, full.names = TRUE)
+
+full_quantseq_PolyA <- all_QuantSeq_PolyA_read_files %>%
+  lapply(load_polyA_reads) %>%
+  purrr::reduce(bind_rows)
+```
+
+```{r calculate-cumulative-distibution}
+
+full_quantseq_polyA_reads_from_stop_codon <- full_quantseq_PolyA %>%
+  inner_join(construct_stop_codon) %>%
+  mutate(read_end = read_end - stop_codon_pos) %>%
+  filter(read_end >0, read_end < 150)
+
+full_quantseq_cumulative_polyA_reads <- full_quantseq_polyA_reads_from_stop_codon %>%
+  group_by(construct_name,read_end, terminator, promoter, mod,sample) %>%
+  summarise(read_count = n()) %>%
+  arrange(construct_name, read_end) %>%
+  group_by(construct_name, sample) %>%
+  mutate(cumulative_counts = cumsum(read_count), 
+         total_counts = sum(read_count),
+         rel_cumulative_counts = cumulative_counts / total_counts)
+
+empty_full_length_quantseq_plasmids <- tibble(construct_name = rep(full_quantseq_cumulative_polyA_reads %>% pull(construct_name) %>% unique(), each = 151), 
+                                              read_end = rep(0:150,15))
+
+full_length_quantseq_plasmids_cumulative_polyA_reads <- full_quantseq_cumulative_polyA_reads %>%
+  select(-read_count, - total_counts) %>%
+  group_by(construct_name, sample) %>%
+  do(fill_missing_nucleotide_data(., empty_full_length_quantseq_plasmids))
+```
+
+```{r plot_cumulative_graph}
+cumulative_graph <- ggplot(full_length_quantseq_plasmids_cumulative_polyA_reads) +
+  geom_line(aes(x = read_end, y = rel_cumulative_counts, linetype = str_detect(sample, "A"), group = sample, colour = mod)) +
+  facet_wrap(~promoter,  scales = "free_y")
+
+ggsave(here("PolyA_cumulative_graph.png"), cumulative_graph, height = 4, width = 10)
+```
