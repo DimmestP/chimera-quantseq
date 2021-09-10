@@ -61,9 +61,22 @@ fill_missing_nucleotide_data <- function(nucleotide_with_known_counts, empty_ful
   left_join(nucleotide_with_known_counts) %>%
   fill(read_end, terminator, promoter, mod, sample, cumulative_counts, rel_cumulative_counts, .direction = "down")
 }
+
+calc_polyA_site_usage <- function(polyA_count_data, polyA_site_position){
+  total_counts_pre_polyA <- polyA_count_data %>%
+    filter(read_end == polyA_site_position) %>%
+    pull(cumulative_counts)
+    
+  
+  total_counts_post_polyA <- polyA_count_data %>%
+    filter(read_end == max(read_end)) %>%
+    pull(cumulative_counts)
+  
+  tibble(sample = unique(polyA_count_data$sample), mod = unique(polyA_count_data$mod), pre_polyA_site_count_ratio = total_counts_pre_polyA / total_counts_post_polyA)
+}
 ```
 
-```{r load_polyA_reads}
+```{r load-polyA-reads}
 all_QuantSeq_PolyA_read_files <- list.files(path = here("data/output/sorted_bam/"), pattern = ".bed$", recursive = TRUE, full.names = TRUE)
 
 full_quantseq_PolyA <- all_QuantSeq_PolyA_read_files %>%
@@ -96,10 +109,31 @@ full_length_quantseq_plasmids_cumulative_polyA_reads <- full_quantseq_cumulative
   do(fill_missing_nucleotide_data(., empty_full_length_quantseq_plasmids))
 ```
 
-```{r plot_cumulative_graph}
+```{r plot-cumulative-graph}
 cumulative_graph <- ggplot(full_length_quantseq_plasmids_cumulative_polyA_reads) +
   geom_line(aes(x = read_end, y = rel_cumulative_counts, linetype = str_detect(sample, "A"), group = sample, colour = mod)) +
   facet_wrap(~promoter,  scales = "free_y")
 
 ggsave(here("PolyA_cumulative_graph.png"), cumulative_graph, height = 4, width = 10)
+```
+
+```{r compare-site-usage-pRPS3}
+polyA_site_position = 69
+
+RPS3_cumulative_polyA_reads <- full_length_quantseq_plasmids_cumulative_polyA_reads %>%
+  filter(promoter == "pRPS3")
+
+example_chosen_poly_a_site<- ggplot(RPS3_cumulative_polyA_reads) +
+  geom_vline(xintercept = polyA_site_position) +
+  geom_line(aes(x = read_end, y = rel_cumulative_counts, linetype = str_detect(sample, "A"), group = sample, colour = mod)) +
+  lims(x = c(0,100)) 
+
+RPS3_pre_polyA_reads_ratio <- RPS3_cumulative_polyA_reads %>%
+  group_by(sample, mod) %>%
+  do(calc_polyA_site_usage(., polyA_site_position))
+
+example_poly_a_site_usage_ratio <- ggplot(RPS3_pre_polyA_reads_ratio) +
+  geom_point(aes(x = mod, y = pre_polyA_site_count_ratio))
+
+save(example_poly_a_site_usage_ratio,  example_chosen_poly_a_site, file = here("poly_a_site_usage_exmaple.RData"))
 ```
