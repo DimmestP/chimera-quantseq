@@ -8,18 +8,18 @@ output: html_document
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(here)
+source(here("./code/shared_figure_formatting.R"))
 
 construct_stop_codon <- tibble(promoter = c(rep(c("pRPS3", "pPGK1", "pTSA1"),
-                                                each = 4), 
-                                            c("pRPS3", "pPGK1", "pTSA1")), 
-                               mod = c(rep(c("mod0", "modA", "modB","modE"),
+                                                each = 5), 
+                                            c("pRPS3", "pRPS3")), 
+                               mod = c(rep(c("mod0", "modA", "modB","modE","WT"),
                                                 times = 3), 
-                                            c("WT", "WT", "WT")),
+                                            c("modC", "modD")),
                                stop_codon_pos = c(rep(c(3310, 3310, 3069),
-                                                each = 4), 
-                                            c(3310, 3310, 3069)))
+                                                each = 5), 
+                                            c(3310, 3310)))
 
-# c(3310, 3310, 3069)
 ```
 
 ```{r functions}
@@ -63,22 +63,35 @@ fill_missing_nucleotide_data <- function(nucleotide_with_known_counts, empty_ful
 }
 ```
 
-```{r load_polyA_reads}
-all_QuantSeq_PolyA_read_files <- list.files(path = here("data/output/sorted_bam/"), pattern = ".bed$", recursive = TRUE, full.names = TRUE)
+```{r load_polyA_reads, warnings = FALSE, message = FALSE}
+all_QuantSeq_PolyA_read_files <- list.files(path = here("data/output/sorted_bam/QuantSeq/"), pattern = ".bed$", recursive = TRUE, full.names = TRUE)
 
-full_quantseq_PolyA <- all_QuantSeq_PolyA_read_files %>%
+all_5PSeq_PolyA_read_files <- list.files(path = here("data/output/sorted_bam/5PSeq/"), pattern = ".bed$", recursive = TRUE, full.names = TRUE)
+
+full_QuantSeq_PolyA_reads <- all_QuantSeq_PolyA_read_files %>%
   lapply(load_polyA_reads) %>%
   purrr::reduce(bind_rows)
+
+full_5PSeq_PolyA_reads <- all_5PSeq_PolyA_read_files %>%
+  lapply(load_polyA_reads) %>%
+  purrr::reduce(bind_rows)
+
 ```
 
 ```{r calculate-cumulative-distibution}
 
-full_quantseq_polyA_reads_from_stop_codon <- full_quantseq_PolyA %>%
+full_QuantSeq_polyA_reads_from_stop_codon <- full_QuantSeq_PolyA_reads %>%
   inner_join(construct_stop_codon) %>%
   mutate(read_end = read_end - stop_codon_pos) %>%
-  filter(read_end >0, read_end < 150)
+  filter(read_end > 0, read_end < 150)
 
-full_quantseq_cumulative_polyA_reads <- full_quantseq_polyA_reads_from_stop_codon %>%
+full_5PSeq_polyA_reads_from_stop_codon <- full_5PSeq_PolyA_reads %>%
+  inner_join(construct_stop_codon) %>%
+  mutate(read_end = read_end - stop_codon_pos) %>%
+  filter(read_end > 0, read_end < 150)
+
+
+full_QuantSeq_cumulative_polyA_reads <- full_QuantSeq_polyA_reads_from_stop_codon %>%
   group_by(construct_name,read_end, terminator, promoter, mod,sample) %>%
   summarise(read_count = n()) %>%
   arrange(construct_name, read_end) %>%
@@ -87,19 +100,66 @@ full_quantseq_cumulative_polyA_reads <- full_quantseq_polyA_reads_from_stop_codo
          total_counts = sum(read_count),
          rel_cumulative_counts = cumulative_counts / total_counts)
 
-empty_full_length_quantseq_plasmids <- tibble(construct_name = rep(full_quantseq_cumulative_polyA_reads %>% pull(construct_name) %>% unique(), each = 151), 
+full_5PSeq_cumulative_polyA_reads <- full_5PSeq_polyA_reads_from_stop_codon %>%
+  group_by(construct_name,read_end, terminator, promoter, mod,sample) %>%
+  summarise(read_count = n()) %>%
+  arrange(construct_name, read_end) %>%
+  group_by(construct_name, sample) %>%
+  mutate(cumulative_counts = cumsum(read_count),
+         total_counts = sum(read_count),
+         rel_cumulative_counts = cumulative_counts / total_counts)
+
+empty_full_length_QuantSeq_plasmids <- tibble(construct_name = rep(full_QuantSeq_cumulative_polyA_reads %>% pull(construct_name) %>% unique(), each = 151), 
                                               read_end = rep(0:150,15))
 
-full_length_quantseq_plasmids_cumulative_polyA_reads <- full_quantseq_cumulative_polyA_reads %>%
+empty_full_length_5PSeq_plasmids <- tibble(construct_name = rep(full_5PSeq_cumulative_polyA_reads %>% pull(construct_name) %>% unique(), each = 151),
+                                              read_end = rep(0:150,7))
+
+
+full_length_QuantSeq_plasmids_cumulative_polyA_reads <- full_QuantSeq_cumulative_polyA_reads %>%
   select(-read_count, - total_counts) %>%
   group_by(construct_name, sample) %>%
-  do(fill_missing_nucleotide_data(., empty_full_length_quantseq_plasmids))
+  do(fill_missing_nucleotide_data(., empty_full_length_QuantSeq_plasmids)) %>%
+  inner_join(construct_to_label_dictionary_TSA1_RPS3)
+
+full_length_5PSeq_plasmids_cumulative_polyA_reads <- full_5PSeq_cumulative_polyA_reads %>%
+  select(-read_count, - total_counts) %>%
+  group_by(construct_name, sample) %>%
+  do(fill_missing_nucleotide_data(., empty_full_length_5PSeq_plasmids)) %>%
+  inner_join(construct_to_label_dictionary_TSA1_RPS3)
+
 ```
 
 ```{r plot_cumulative_graph}
-cumulative_graph <- ggplot(full_length_quantseq_plasmids_cumulative_polyA_reads) +
-  geom_line(aes(x = read_end, y = rel_cumulative_counts, linetype = str_detect(sample, "A"), group = sample, colour = mod)) +
-  facet_wrap(~promoter,  scales = "free_y")
+cumulative_graph_QuantSeq_pRPS3 <- ggplot(full_length_QuantSeq_plasmids_cumulative_polyA_reads %>%
+  filter(promoter == "pRPS3")) +
+  geom_line(aes(x = read_end, y = rel_cumulative_counts, linetype = str_detect(sample, "A"), group = sample, colour = label)) +
+  guides(linetype = FALSE, colour = FALSE) +
+  labs(x="", y="Fraction of Reads", title = "pRPS3-tRPS3 (QuantSeq)") +
+  scale_colour_manual(values = RPS3_TSA1_colour_scheme)
 
-ggsave(here("PolyA_cumulative_graph.png"), cumulative_graph, height = 4, width = 10)
+cumulative_graph_QuantSeq_pTSA1 <- ggplot(full_length_QuantSeq_plasmids_cumulative_polyA_reads %>%
+  filter(promoter == "pTSA1")) +
+  geom_line(aes(x = read_end, y = rel_cumulative_counts, linetype = str_detect(sample, "A"), group = sample, colour = label)) +
+  guides(colour = FALSE)  +
+  labs(x="Position relative to stop codon", y="", title = "pTSA1-tTSA1 (QuantSeq)") +
+  scale_linetype_discrete(labels = c(1,2), name = "Rep") +
+  scale_colour_manual(values = RPS3_TSA1_colour_scheme)
+
+cumulative_graph_QuantSeq_pPGK1 <- ggplot(full_length_QuantSeq_plasmids_cumulative_polyA_reads %>%
+  filter(promoter == "pPGK1")) +
+  geom_line(aes(x = read_end, y = rel_cumulative_counts, linetype = str_detect(sample, "A"), group = sample, colour = label)) +
+  guides(colour = FALSE, linetype = FALSE)  +
+  labs(x="Position relative to stop codon", y="Fraction of Reads", title = "pPGK1-tRPS3 (QuantSeq)") +
+  scale_colour_manual(values = RPS3_TSA1_colour_scheme)
+
+cumulative_graph_5PSeq <- ggplot(full_length_5PSeq_plasmids_cumulative_polyA_reads) +
+  geom_line(aes(x = read_end, y = rel_cumulative_counts, group = sample, colour = label)) +
+  guides(linetype = FALSE)   +
+  labs(x="", y="", title = "pRPS3-tRPS3 (5PSeq)") +
+  scale_colour_manual(values = RPS3_TSA1_colour_scheme)
+
+combined_graph <- cowplot::plot_grid(cumulative_graph_QuantSeq_pRPS3, cumulative_graph_5PSeq,cumulative_graph_QuantSeq_pPGK1, cumulative_graph_QuantSeq_pTSA1, ncol=2, axis = "r", align = "hv")
+
+save(file = here("./data/output/PolyA_cumulative_graph.RData"), combined_graph)
 ```
