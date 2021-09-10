@@ -8,11 +8,11 @@ These still need documentation and flexibility.
 To find where they are used, search the document for the name, 
 e.g. "params.featurename" is used in the featureCounts call.
 */
-params.read_1_adapters_1 = 'TTTTTTTTTTTTTTTTTT'
-params.read_2_adapters_1 = 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA'
-params.read_2_adapters_2 = 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT'
-params.read_2_adapters_3 = 'AATGATACGGCGACCACCGAGATCTACACTCTTTCCCTACACGACGCTCTTCCGATCT'
-params.read_2_adapters_4 = 'AAAAAAAAAAAAAAAAAA'
+params.read_1_adapter = 'TTTTTTTTTTTTTTTTTT'
+params.read_adapters_1 = 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCA'
+params.read_adapters_2 = 'AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT'
+params.read_adapters_3 = 'AATGATACGGCGACCACCGAGATCTACACTCTTTCCCTACACGACGCTCTTCCGATCT'
+params.read_2_adapter = 'AAAAAAAAAAAAAAAAAA'
 params.index_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_fastas/indexed_genome/'
 params.index_prefix = '_sample_with_saccharomyces_cerevisiae_R64'
 params.mRNAgff_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_gffs/'
@@ -111,8 +111,9 @@ process cutAdapters {
         tuple val(sample_id), file("trim_*.fq") into cut_fq
     shell:
         """
-        cutadapt --trim-n -O 1 -m 20 -a ${params.read_1_adapters_1} -A ${params.read_2_adapters_1}\
-	    -A ${params.read_2_adapters_2} -A ${params.read_2_adapters_3} -A ${params.read_2_adapters_4}\
+        cutadapt --trim-n -O 1 -m 20 -a ${params.read_1_adapter} -A ${params.read_2_adapter}\
+            -A ${params.read_adapters_1} -A ${params.read_adapters_2} -A ${params.read_adapters_3}\
+            -a ${params.read_adapters_1} -a ${params.read_adapters_2} -a ${params.read_adapters_3}\
             -o trim_1.fq -p trim_2.fq -j ${params.num_processes} ${sample_fq[0]} ${sample_fq[1]}
         """
 }
@@ -154,12 +155,12 @@ process alignHisat2 {
         """
         hisat2 --version
         hisat2 -p ${params.num_processes} -k 2 \
-            --pen-cansplice 4 --pen-noncansplice 12 --min-intronlen 40  --max-intronlen 200 \
+            --no-spliced-alignment \
             --no-unal \
             --un unaligned.fq -x ${sample_id}${params.index_prefix} \
             -S aligned.sam \
 	    -1 ${sample_fq[0]} -2 ${sample_fq[1]} \
-            --summary-file ${sample_id}.hisat2_summary.txt
+            --summary-file ${sample_id}.hisat2_summary.txt --maxins 1500
         """
 }
 
