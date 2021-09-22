@@ -16,8 +16,8 @@ params.read_2_adapter = 'AAAAAAAAAAAAAAAAAA'
 params.index_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_fastas/indexed_genome/'
 params.index_prefix = '_sample_with_saccharomyces_cerevisiae_R64'
 params.mRNAgff_dir = '../data/input/Scer_ref_genome/construct_integrated_genome/construct_genome_gffs/'
-params.input_fq_dir = '/homes/wallacelab/datastore/wallace_rna/bigdata/fastq/EdWallace-030521-data/' 
-params.output_dir = '/homes/wallacelab/datastore/wallace_rna/data/2021/07-July/Sam/chimera_quantseq_pipeline_output/'
+params.input_fq_dir = '../data/input/simulated_count_data/' 
+params.output_dir = '../data/output/simulated_quantseq_pipeline_output/'
 params.featuretype = 'primary_transcript'
 params.featurename = 'ID'
 params.num_processes = 4
@@ -44,7 +44,8 @@ Define the input fastq.gz files, pairing forward and reverse reads and grouping 
 */
 
 multi_lane_input_fq = Channel
-    .fromFilePairs("${params.input_fq_dir}/*_R{1,2}_001.fastq.gz", size: 2)
+    .fromFilePairs("${params.input_fq_dir}/*_R{1,2}_001.fastq", size: 2)
+    .view()
     .map(extractSampleCode)
     .groupTuple(size: 4)
     .map(flattenFileList)
@@ -57,11 +58,11 @@ process combineLanesAcrossSamples {
     set sample_id, file(seq) from multi_lane_input_fq
 
     output:
-    tuple val(sample_id), file("${sample_id}_R*.fastq.gz") into input_fq
+    tuple val(sample_id), file("${sample_id}_R*.fastq") into input_fq
 
     """
-    cat ${seq.findAll{it =~/_R1_/}.asType(nextflow.util.BlankSeparatedList)} > ${sample_id + '_R1.fastq.gz'}
-    cat ${seq.findAll{it =~/_R2_/}.asType(nextflow.util.BlankSeparatedList)} > ${sample_id + '_R2.fastq.gz'}
+    cat ${seq.findAll{it =~/_R1_/}.asType(nextflow.util.BlankSeparatedList)} > ${sample_id + '_R1.fastq'}
+    cat ${seq.findAll{it =~/_R2_/}.asType(nextflow.util.BlankSeparatedList)} > ${sample_id + '_R2.fastq'}
    """
 }
 
