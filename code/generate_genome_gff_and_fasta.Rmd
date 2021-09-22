@@ -87,7 +87,7 @@ plasmid_primary_transcript_feature <- plasmid_features_long %>%
 plasmid_features_no_URA3_primary_transcript <- plasmid_features_long %>%
   bind_rows(plasmid_primary_transcript_feature) %>%
   mutate(strand = ifelse(feature == "URA3", "-", "+")) %>%
-  mutate(source = "chimera-project", score = ".", frame = ".", attribute = paste0("ID=", Construct_name), seqname = Construct_name, end = stop) %>%
+  mutate(source = "chimera-project", score = ".", frame = ".", attribute = paste0("ID=", Construct_name, "_", feature, ";Name=", Construct_name, "_", feature), seqname = Construct_name, end = stop) %>%
   select(GTF_COLNAMES)
 
 # Adds a URA3 as a primary_transcript feature to enable counting with featureCounts
@@ -100,7 +100,7 @@ plasmid_features_all <- plasmid_features_no_URA3_primary_transcript %>%
                      source = "chimera-project", 
                      score = ".", 
                      frame = ".", 
-                     attribute = paste0("ID=", Construct_name, "_URA3"), 
+                     attribute = paste0("ID=", Construct_name, "_URA3", ";Name=", Construct_name, "_URA3"), 
                      seqname = Construct_name, 
                      end = stop) %>%
               select(GTF_COLNAMES)
@@ -112,7 +112,8 @@ plasmid_features_all_two_reps <- plasmid_features_all %>%
               mutate(rep = paste0(seqname, "_b2"))) %>%
   inner_join(RNA_seq_sample_names, by = c("rep" = "construct_name"))
 
-genome_features <- read_tsv(here("data/input/Scer_ref_genome/longest_full-ORF_ypd_plus_other_fixed_UTR_length_transcripts.gff"), comment="#", col_names = GTF_COLNAMES)
+genome_features <- read_tsv(here("data/input/Scer_ref_genome/longest_full-ORF_ypd_plus_other_fixed_UTR_length_transcripts.gff"), comment="#", col_names = GTF_COLNAMES) %>%
+  mutate(attribute = paste0(attribute, ";Name=", str_extract(attribute, "(?<=ID\\=)\\w+")))
 
 # Write separate gff files for each sample
 plasmid_features_all_two_reps %>%
