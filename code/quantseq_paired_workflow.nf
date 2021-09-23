@@ -161,7 +161,8 @@ process alignHisat2 {
             --un unaligned.fq -x ${sample_id}${params.index_prefix} \
             -S aligned.sam \
 	    -1 ${sample_fq[0]} -2 ${sample_fq[1]} \
-            --summary-file ${sample_id}.hisat2_summary.txt --maxins 1500
+            --summary-file ${sample_id}.hisat2_summary.txt --maxins 1500 \
+            --rna-strandness RF
         """
 }
 
